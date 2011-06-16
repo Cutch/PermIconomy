@@ -1,0 +1,8 @@
+name: PermIconomy
+main: com.Cutch.bukkit.PermIconomy.PermIconomy
+version: 1.0
+author: Cutch
+commands:
+  permi:
+    description: Add Hotkey like functionality
+    usage: /permi [buy|list|reload]
