@@ -12,34 +12,22 @@ public class PermissionSupport {
     PermIconomy plugin = null;
     String Version = "";
     private PermissionHandler Permissions=null;
-    int permissionsType = 0;
     public PermissionSupport(PermIconomy instance)
     {
         this.plugin = instance;
     }
-    public int setupPermissions(int permissionsType) {
+    public void setupPermissions() {
         Plugin test = plugin.getServer().getPluginManager().getPlugin("Permissions");
         if (this.Permissions == null) {
             if(test != null) {
                 Permissions p = (Permissions)test;
                 Version = p.getDescription().getVersion();
                 this.Permissions = p.getHandler();
-                if(permissionsType == 0)
-                    System.out.println("PermIconomy: Using Permissions Plugin v" + Version);
-                else
-                    System.out.println("PermIconomy: Using Basic Permissions");
-            } 
-            else if(permissionsType == 1)
-                System.out.println("PermIconomy: Using Basic Permissions");
+            }
             else {
-                permissionsType=1;
                 System.out.println("PermIconomy: Permission system not detected. Using Basic Permissions.");
             }
         }
-        return this.permissionsType = permissionsType;
-    }
-    public int returnPermissionType(){
-        return permissionsType; 
     }
     public boolean has(Player name, String node)
     {

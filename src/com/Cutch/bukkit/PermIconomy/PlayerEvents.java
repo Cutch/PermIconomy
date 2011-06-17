@@ -19,6 +19,7 @@ public class PlayerEvents extends PlayerListener {
 //    }
     @Override
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
+        //May need to use Chat Event
         Player player = event.getPlayer();
         String splayer = player.getName();
         Transaction transaction = Transaction.pendingTransactions.get(player);

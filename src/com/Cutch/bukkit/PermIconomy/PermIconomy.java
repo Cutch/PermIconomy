@@ -48,12 +48,10 @@ public class PermIconomy extends JavaPlugin {
     public iConomySupport ics = null;
     PermissionSupport pms = null;
     public int iConomyA = 0;
-    int permissionsType = 0;
     private PlayerEvents playerListener;
     Double version = null;
     boolean update = true;
     public List<Item> items = null;
-//    public List<Transaction> pendingTransactions = null;
     
     public void onDisable() {
         System.out.println("PermIconomy is Disabled");
@@ -68,10 +66,9 @@ public class PermIconomy extends JavaPlugin {
         try
         {
             pms = new PermissionSupport(this);
-            permissionsType = pms.setupPermissions(permissionsType);
+            pms.setupPermissions();
         }catch(NoClassDefFoundError e){
-            permissionsType=1;
-            System.out.println("PermIconomy: Permission system not detected. Using Basic Permissions.");
+            System.out.println("PermIconomy: Permission system not detected.");
         }
         setupiConomy();
         setupHelp();
@@ -127,6 +124,15 @@ public class PermIconomy extends JavaPlugin {
                 else if(args[0].equalsIgnoreCase("list"))
                 {
                     int page = 1;
+                    if(args.length > 1)
+                    {
+                        try{
+                        page = Integer.parseInt(args[1]);}
+                        catch(NumberFormatException e)
+                        {
+                            sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Permissions");
+                        }
+                    }
                     int maxpage = (items.size() / 12)+1;
                     page = Math.max(Math.min(page, (items.size() / 12)+1), 1);
                     int max = Math.min((page)*12, items.size());
@@ -143,7 +149,7 @@ public class PermIconomy extends JavaPlugin {
                     {
                         this.onDisable();
                         this.onEnable();
-                        sendMessage(player, ChatColor.RED+"PermIconomy Has been Reloaded");
+                        sendMessage(player, errc+"PermIconomy Has been Reloaded");
                     }
                     else
                         sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -237,40 +243,49 @@ public class PermIconomy extends JavaPlugin {
             savePref();
             data = readData(properties, false);}
         String line = null;
+        Item lastItem = null;
         for(int i = 0; i < data.size(); i++)
         {
             line = data.get(i);
-            int e = line.indexOf("#");
-            if(e != -1)
-                line = line.substring(0, e);
+            int i2 = line.indexOf("#");
+            if(i2 != -1)
+                line = line.substring(0, i2);
             String[] p = line.split("=");
             if(p.length == 2)
             {
                 String name = p[0].trim();
                 String value = p[1].trim();
-                if(name.equalsIgnoreCase("version"))
+                if(name.equalsIgnoreCase("name"))
                 {
-                    try{
-                        version=Double.parseDouble(value);}
-                    catch(NumberFormatException ew){
-                        System.out.println("Error in PermIconomy.properties version should be in the format x.xx but with numbers...");
+                    if(lastItem != null)
+                        items.add(lastItem);
+                    lastItem = new Item();
+                    lastItem.setName(value);
+                }
+                else if(name.equalsIgnoreCase("price"))
+                {
+                    try {
+                        lastItem.price = Double.parseDouble(value);
+                    } catch(NumberFormatException e) {
+                        System.out.println("PermIconomy: Error in PermIconomy.properties with price on line #" + i);
                     }
                 }
-                else if(name.equalsIgnoreCase("UpdateDB"))
+                else if(name.equalsIgnoreCase("desc"))
                 {
-                    if(value.equalsIgnoreCase("true"))
-                        update = true;
-                    else
-                        update = false;
+                    lastItem.description = value;
                 }
-                else if(name.equalsIgnoreCase("permissionType"))
+                else if(name.equalsIgnoreCase("permissions"))
                 {
-                    if(value.equalsIgnoreCase("plugin")){
-                        permissionsType = 0;}
-                    else if(value.equalsIgnoreCase("basic")){
-                        permissionsType = 1;}
-                    else
-                        System.out.println("Error in PermIconomy.properties with permissionType on line #" + i);
+                    lastItem.parsePermissions(value);
+                }
+                else if(name.equalsIgnoreCase("group"))
+                {
+                    lastItem.parsePermissions(value);
+                    lastItem.isGroup = true;
+                }
+                else if(name.equalsIgnoreCase("requirements"))
+                {
+                    lastItem.parseRequirements(value);
                 }
             }
         }
@@ -279,10 +294,15 @@ public class PermIconomy extends JavaPlugin {
     {
         if(update) {
             ArrayList<String> data = new ArrayList<String>();
-            data.add("Version="+this.getDescription().getVersion()+" #This is used to update the database and properties files");
-            data.add("UpdateDB="+String.valueOf(update)+" #Setting this to false will disable version updates for the database, it will be usable but changes wont be saved");
-            data.add("PermissionType=" + (permissionsType == 0 ? "plugin" : "basic") + " # Plugin OR Basic Permissions");
-            data.add("#For basic permission use only(No Plugin)");
+            data.add("#You must repeat this block for each available item.");
+            data.add("Name=");
+            data.add("Price=#Put a $ sign in front to specify real money");
+            data.add("Desc=");
+            data.add("Permissions=#Permissions are seperated by ',' (a comma)");
+            data.add("#---OR--- Please only use a set of Permissions OR one Group");
+            data.add("#Group=#Can only be a Single Group");
+            data.add("Requirements=#Requirements are seperated by ',' (a comma)");
+            data.add("#end");
             saveData(data, properties);
         }
     }
@@ -305,39 +325,12 @@ public class PermIconomy extends JavaPlugin {
     void showHelp(Player player){
         sendMessage(player, errc + "[] is required, <> is optional");
         int i = 0;
-        if(checkPermissions(player, "ICmds.create")) {
-            sendMessage(player, cmdc + "Usage: /permi add [-i item|-s slot] <flags> [command] "+descc+"#Add command");
-            sendMessage(player, cmdc + "/permi remove [id] "+descc+"#Remove command by ID");
-            sendMessage(player, cmdc + "/icmd change [id] <flags> <command> "+descc+"#Change properties of IDs command");
-            sendMessage(player, cmdc + "/icmd swap [id #1] [id #2] "+descc+"#Swap commands by ID");
-            sendMessage(player, cmdc + "/icmd flags "+descc+"#Shows flags and their usage");
+        if(checkPermissions(player, "PermIconomy.create")) {
+            sendMessage(player, cmdc + "/permi buy [Name] "+descc+"#Add command");
+            sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Permissions");
             i++;}
-        if(checkPermissions(player, "ICmds.use")){
-            sendMessage(player, cmdc + "/permi list "+descc+"#List commands available");
-            i++;}
-        if(checkPermissions(player, "ICmds.admin")){
+        if(checkPermissions(player, "PermIconomy.admin")){
             sendMessage(player, cmdc + "/permi reload");
-            i++;}
-        if(i == 0)
-            sendMessage(player, cmdc + "No Permissions to use PermIconomy");
-    }
-    void showFlags(Player player){
-        int i = 0;
-        if(checkPermissions(player, "ICmds.create")) {
-            sendMessage(player, cmdc + "-g "+descc+"Add / Change / Swap / Remove / List globally");
-            sendMessage(player, cmdc + "-l "+descc+"Left Click / -r Right Click");
-            sendMessage(player, cmdc + "-e "+descc+"Enable Normal Click Events");
-            sendMessage(player, cmdc + "-d [#] "+descc+"Specifies a Cooldown for the command, Max is around 27h");
-            sendMessage(player, descc + "# Can be in the format #s, #m, #h, just a # defaults as seconds");
-            sendMessage(player, cmdc + "-c [list] "+descc+"Consumables");
-            sendMessage(player, descc + "list = id<:damage>+/-amount;... or $+/-amount;... or *-amount;...");
-            sendMessage(player, cmdc + "-al (all) "+descc+"#Runs all commands");
-            sendMessage(player, cmdc + "-cy (cycle) "+descc+"#Runs one command after another in order");
-            sendMessage(player, cmdc + "-ra (random) "+descc+"#Runs one random command");
-            sendMessage(player, cmdc + "-sh (shuffle) "+descc+"#Runs one random command but runs them the same amount of times");
-            i++;}
-        if(checkPermissions(player, "ICmds.admin")){
-            sendMessage(player, cmdc + "-t [id] "+descc+"Only used from Console to specify a slot 1-9 or Item #");
             i++;}
         if(i == 0)
             sendMessage(player, cmdc + "No Permissions to use PermIconomy");

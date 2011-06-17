@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.Cutch.bukkit.PermIconomy;
 
 import java.util.ArrayList;
@@ -11,10 +7,6 @@ import java.util.List;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
-/**
- *
- * @author Cutch
- */
 public class Transaction {
     PermIconomy plugin = null;
     public boolean confirm = false;
