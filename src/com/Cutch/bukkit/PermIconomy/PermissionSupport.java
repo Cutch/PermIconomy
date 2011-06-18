@@ -11,7 +11,7 @@ import org.bukkit.plugin.Plugin;
 public class PermissionSupport {
     PermIconomy plugin = null;
     String Version = "";
-    private PermissionHandler Permissions=null;
+    public PermissionHandler Permissions=null;
     public PermissionSupport(PermIconomy instance)
     {
         this.plugin = instance;

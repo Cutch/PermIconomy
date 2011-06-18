@@ -45,6 +45,7 @@ public class PermIconomy extends JavaPlugin {
     ChatColor errc = ChatColor.RED;
     ChatColor infoc = ChatColor.YELLOW;
     String properties = "PermIconomy.properties";
+    String recordFile = "Records.db";
     public iConomySupport ics = null;
     PermissionSupport pms = null;
     public int iConomyA = 0;
@@ -52,6 +53,7 @@ public class PermIconomy extends JavaPlugin {
     Double version = null;
     boolean update = true;
     public List<Item> items = null;
+    String[] rmadmins = null;
     
     public void onDisable() {
         System.out.println("PermIconomy is Disabled");
@@ -61,6 +63,8 @@ public class PermIconomy extends JavaPlugin {
         PluginDescriptionFile desc = this.getDescription();
         items = new ArrayList<Item>();
         Transaction.pendingTransactions = new Hashtable<Player, Transaction>();
+        Transaction.records = new Hashtable<String, List<String>>();
+        readRecords();
         version = null;
         readPref();
         try
@@ -76,16 +80,18 @@ public class PermIconomy extends JavaPlugin {
         playerListener = new PlayerEvents(this);
         ics = new iConomySupport(this) {};
 //        plmgr.registerEvent(Event.Type.PLAYER_INTERACT, playerListener, Priority.Highest, this);
-        plmgr.registerEvent(Event.Type.PLAYER_COMMAND_PREPROCESS, playerListener, Priority.Highest, this);
+        plmgr.registerEvent(Event.Type.PLAYER_CHAT, playerListener, Priority.Monitor, this);
         System.out.println("PermIconomy: v" + desc.getVersion() + " is Enabled");
     }
     @Override
     public boolean onCommand(CommandSender sender, Command cmd1, String commandLabel, String[] args) {
         String cmdmsg = cmd1.getName();
         Player player = null;
+        String splayer = "";
         if(sender instanceof Player)
         {
             player = (Player)sender;
+            splayer = player.getName();
         }
         if(cmdmsg.equalsIgnoreCase("permi"))
         {
@@ -93,7 +99,9 @@ public class PermIconomy extends JavaPlugin {
             {
                 if(args[0].equalsIgnoreCase("buy"))
                 {
-                    if(checkPermissions(player, "PermIconomy.buy"))
+                    if(player == null)
+                        sendMessage(player, errc + "You cant use the Console with this command.");
+                    else if(checkPermissions(player, "PermIconomy.buy"))
                     {
                         if(args.length > 1)
                         {
@@ -105,7 +113,7 @@ public class PermIconomy extends JavaPlugin {
                             for(int i = 0; i < items.size(); i++)
                             {
                                 Item item = items.get(i);
-                                if(item.name.startsWith(cleanStr))
+                                if(item.cleanName.startsWith(cleanStr))
                                 {
                                     possibleItems.add(item);
                                 }
@@ -113,7 +121,7 @@ public class PermIconomy extends JavaPlugin {
                             if(possibleItems.isEmpty())
                                 sendMessage(player, errc+str+" is not a valid permission.");
                             else
-                                Transaction.pendingTransactions.put(player, new Transaction(this, possibleItems));
+                                Transaction.pendingTransactions.put(player, new Transaction(this, player, possibleItems));
                         }
                         else
                             sendMessage(player, errc+"/permi buy [Permission Name]");
@@ -133,15 +141,24 @@ public class PermIconomy extends JavaPlugin {
                             sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Permissions");
                         }
                     }
-                    int maxpage = (items.size() / 12)+1;
-                    page = Math.max(Math.min(page, (items.size() / 12)+1), 1);
-                    int max = Math.min((page)*12, items.size());
-                    for (int i = (page-1)*12; i < max; i++)
+                    List<Item> filteredItems = new ArrayList<Item>();
+                    for(Item i : items)
+                        if(i.checkRequirements(splayer))
+                            filteredItems.add(i);
+                    if(filteredItems.isEmpty())
+                        sendMessage(player, cmdc + "Nothing to List");
+                    else
                     {
-                        Item perm = items.get(i);
-                        sendMessage(player, perm.name + " " + String.valueOf(perm.price));
+                        int maxpage = (filteredItems.size() / 12)+1;
+                        page = Math.max(Math.min(page, (filteredItems.size() / 12)+1), 1);
+                        int max = Math.min((page)*12, filteredItems.size());
+                        for (int i = (page-1)*12; i < max; i++)
+                        {
+                            Item perm = filteredItems.get(i);
+                            sendMessage(player, perm.name + " " + String.valueOf(perm.price));
+                        }
+                        sendMessage(player, "Page "+String.valueOf(page)+" of "+String.valueOf(maxpage));
                     }
-                    sendMessage(player, "Page "+String.valueOf(page)+" of "+String.valueOf(maxpage));
                 }
                 else if(args[0].equalsIgnoreCase("reload"))
                 {
@@ -182,9 +199,9 @@ public class PermIconomy extends JavaPlugin {
     {
         Plugin test = this.getServer().getPluginManager().getPlugin("Help");
         if (test != null) {
-            String[] permissions = new String[]{"ICmds.create", "ICmds.use", "ICmds.admin"};
+            String[] permissions = new String[]{"PermIconomy.buy", "PermIconomy.admin"};
             Help help = ((Help)test);
-            help.registerCommand("icmd", "Help for Item Commands", this, true, permissions);
+            help.registerCommand("permi", "Help for PermIconomy", this, true, permissions);
         }
     }
     void saveData(ArrayList<String> data, String file)
@@ -259,11 +276,15 @@ public class PermIconomy extends JavaPlugin {
                 {
                     if(lastItem != null)
                         items.add(lastItem);
-                    lastItem = new Item();
+                    lastItem = new Item(this);
                     lastItem.setName(value);
                 }
                 else if(name.equalsIgnoreCase("price"))
                 {
+                    if(value.startsWith("$")){
+                        lastItem.realMoney = true;
+                        value = value.substring(1);
+                    }
                     try {
                         lastItem.price = Double.parseDouble(value);
                     } catch(NumberFormatException e) {
@@ -278,30 +299,49 @@ public class PermIconomy extends JavaPlugin {
                 {
                     lastItem.parsePermissions(value);
                 }
-                else if(name.equalsIgnoreCase("group"))
+                else if(name.equalsIgnoreCase("groups"))
                 {
-                    lastItem.parsePermissions(value);
-                    lastItem.isGroup = true;
+                    lastItem.parseGroups(value);
                 }
-                else if(name.equalsIgnoreCase("requirements"))
+                else if(name.equalsIgnoreCase("requiredpackages"))
                 {
                     lastItem.parseRequirements(value);
                 }
+                else if(name.equalsIgnoreCase("requiredgroups"))
+                {
+                    lastItem.parseRequiredGroups(value);
+                }
+                else if(name.equalsIgnoreCase("worlds"))
+                {
+                    lastItem.parseWorlds(value);
+                }
+                else if(name.equalsIgnoreCase("realmoneyadmins"))
+                {
+                    rmadmins = Item.cleanList(value.split(","));
+                }
             }
         }
+        if(lastItem != null)
+            items.add(lastItem);
     }
     void savePref()
     {
         if(update) {
             ArrayList<String> data = new ArrayList<String>();
+            data.add("#Any Field Ending in 's' can have multiple values Seperated by ',' (a comma)");
+            data.add("RealMoneyAdmins=#Seperated by ',' (a comma)");
             data.add("#You must repeat this block for each available item.");
             data.add("Name=");
             data.add("Price=#Put a $ sign in front to specify real money");
             data.add("Desc=");
-            data.add("Permissions=#Permissions are seperated by ',' (a comma)");
+            data.add("Permissions=");
             data.add("#---OR--- Please only use a set of Permissions OR one Group");
-            data.add("#Group=#Can only be a Single Group");
-            data.add("Requirements=#Requirements are seperated by ',' (a comma)");
+            data.add("#Groups=");
+            data.add("Worlds=#Use * to specify all worlds");
+            data.add("#If the item for sale is a group, any group in the RequiredGroups will be removed from the user");
+            data.add("#RequiredPackages can be another item name from this file");
+            data.add("RequiredPackages=");
+            data.add("RequiredGroups=");
             data.add("#end");
             saveData(data, properties);
         }
@@ -365,5 +405,44 @@ public class PermIconomy extends JavaPlugin {
     void updatePref()
     {
         savePref();
+    }
+    public void addRecord(String player, String cleanName)
+    {
+        List<String> get = Transaction.records.get(player);
+        if(get == null)
+            get = new ArrayList<String>();
+        get.add(cleanName);
+        Transaction.records.put(player, get);
+        saveRecords();
+    }
+    public void saveRecords()
+    {
+        ArrayList<String> data = new ArrayList<String>();
+        Enumeration<String> keys = Transaction.records.keys();
+        while(keys.hasMoreElements())
+        {
+            String nextElement = keys.nextElement();
+            List<String> ss = Transaction.records.get(nextElement);
+            data.add(nextElement+":"+ listToString(ss.toArray()));
+        }
+        saveData(data, recordFile);
+    }
+    public void readRecords()
+    {
+        ArrayList<String> data = readData(recordFile, true);
+        if(data != null)
+            for(int i = 0; i < data.size(); i++)
+            {
+                String line = data.get(i);
+                int indexOf = line.indexOf(":");
+                if(indexOf != -1)
+                {
+                    String name = line.substring(0, indexOf);
+                    String values = line.substring(indexOf+1);
+                    Transaction.records.put(name, Arrays.asList(values.split(",")));
+                }
+            }
+        else
+            saveRecords();
     }
 }

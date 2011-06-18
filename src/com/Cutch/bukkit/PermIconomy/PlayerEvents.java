@@ -1,7 +1,7 @@
 package com.Cutch.bukkit.PermIconomy;
 
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerChatEvent;
 import org.bukkit.event.player.PlayerListener;
 
 public class PlayerEvents extends PlayerListener {
@@ -18,36 +18,35 @@ public class PlayerEvents extends PlayerListener {
 //        }
 //    }
     @Override
-    public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
-        //May need to use Chat Event
+    public void onPlayerChat(PlayerChatEvent event) {
         Player player = event.getPlayer();
         String splayer = player.getName();
         Transaction transaction = Transaction.pendingTransactions.get(player);
         if(transaction != null)
         {
             String message = event.getMessage().trim().toLowerCase();
-            System.out.println(message);
             if(transaction.confirm)
             {
-                if(message.equals("y")) {
-                    plugin.sendMessage(player, "");
+                if(message.equalsIgnoreCase("y")) {
                     Transaction item = Transaction.pendingTransactions.remove(player);
                     double balance = plugin.ics.balance(splayer);
-                    if(balance - item.item.price >= 0) {
-                        plugin.ics.subtract(splayer, item.item.price);
-                        plugin.sendMessage(player, plugin.cmdc+"Transaction Complete. Current Balance $"+balance);
-                    }
-                    else
+                    if(item.buy())
                     {
-                        plugin.sendMessage(player, plugin.errc+"Transaction Cannot be Completed. Not enough money.");
+                        plugin.sendMessage(player, plugin.cmdc+"Transaction Complete. Current Balance $"+balance);
+                        plugin.addRecord(player.getName(), item.item.cleanName);
                     }
-                } else {
                     Transaction.pendingTransactions.remove(player);
-                    plugin.sendMessage(player, "Transaction Cancelled.");
+                } else if(message.equalsIgnoreCase("n") || message.equalsIgnoreCase("c")) {
+                    Transaction.pendingTransactions.remove(player);
+                    plugin.sendMessage(player, plugin.cmdc+"Transaction Cancelled.");
                 }
             }
             else if(transaction.narrow)
             {
+                if(message.equalsIgnoreCase("n") || message.equalsIgnoreCase("c")) {
+                    Transaction.pendingTransactions.remove(player);
+                    plugin.sendMessage(player, plugin.cmdc+"Transaction Cancelled.");
+                }
                 try {
                     int index = Integer.parseInt(message);
                     transaction.select(index);
@@ -55,6 +54,7 @@ public class PlayerEvents extends PlayerListener {
                     transaction.select(message);
                 }
             }
+            event.setCancelled(true);
         }
     }
 }

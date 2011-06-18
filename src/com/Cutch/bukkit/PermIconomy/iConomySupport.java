@@ -1,5 +1,7 @@
 package com.Cutch.bukkit.PermIconomy;
 
+import org.bukkit.plugin.Plugin;
+
 public abstract class iConomySupport {
     PermIconomy plugin = null;
     String Version = "";
@@ -7,8 +9,12 @@ public abstract class iConomySupport {
     public iConomySupport(PermIconomy instance)
     {
         this.plugin = instance;
-        Version = this.plugin.getServer().getVersion();
-        isV5 = Version.startsWith("5");
+        Plugin test = plugin.getServer().getPluginManager().getPlugin("iConomy");
+        if(test != null)
+        {
+            Version = test.getDescription().getVersion();
+            isV5 = Version.startsWith("5");
+        }
     }
     public void add(String name, double amount)
     {
