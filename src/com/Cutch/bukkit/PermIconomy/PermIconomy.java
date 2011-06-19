@@ -48,10 +48,9 @@ public class PermIconomy extends JavaPlugin {
     String recordFile = "Records.db";
     public iConomySupport ics = null;
     PermissionSupport pms = null;
-    public int iConomyA = 0;
+    public int eConomyA = 0;
     private PlayerEvents playerListener;
     Double version = null;
-    boolean update = true;
     public List<Item> items = null;
     String[] rmadmins = null;
     
@@ -63,7 +62,7 @@ public class PermIconomy extends JavaPlugin {
         PluginDescriptionFile desc = this.getDescription();
         items = new ArrayList<Item>();
         Transaction.pendingTransactions = new Hashtable<Player, Transaction>();
-        Transaction.records = new Hashtable<String, List<String>>();
+        Transaction.records = new Hashtable<String, ArrayList<String>>();
         readRecords();
         version = null;
         readPref();
@@ -74,13 +73,14 @@ public class PermIconomy extends JavaPlugin {
         }catch(NoClassDefFoundError e){
             System.out.println("PermIconomy: Permission system not detected.");
         }
-        setupiConomy();
+        Plugin econ = setupEConomy();
         setupHelp();
         PluginManager plmgr = getServer().getPluginManager();
         playerListener = new PlayerEvents(this);
-        ics = new iConomySupport(this) {};
+        ics = new iConomySupport(this, econ, eConomyA) {};
 //        plmgr.registerEvent(Event.Type.PLAYER_INTERACT, playerListener, Priority.Highest, this);
-        plmgr.registerEvent(Event.Type.PLAYER_CHAT, playerListener, Priority.Monitor, this);
+        plmgr.registerEvent(Event.Type.PLAYER_CHAT, playerListener, Priority.Highest, this);
+        plmgr.registerEvent(Event.Type.PLAYER_JOIN, playerListener, Priority.Monitor, this);
         System.out.println("PermIconomy: v" + desc.getVersion() + " is Enabled");
     }
     @Override
@@ -109,7 +109,7 @@ public class PermIconomy extends JavaPlugin {
                             for(int i = 1; i < args.length; i++)
                                 str += args[i];
                             String cleanStr = Item.cleanString(str);
-                            List<Item> possibleItems = new ArrayList<Item>();
+                            ArrayList<Item> possibleItems = new ArrayList<Item>();
                             for(int i = 0; i < items.size(); i++)
                             {
                                 Item item = items.get(i);
@@ -124,7 +124,7 @@ public class PermIconomy extends JavaPlugin {
                                 Transaction.pendingTransactions.put(player, new Transaction(this, player, possibleItems));
                         }
                         else
-                            sendMessage(player, errc+"/permi buy [Permission Name]");
+                            sendMessage(player, errc+"/permi buy [Permission Name] "+descc+"#Buy a Package");
                     }
                     else
                         sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -138,7 +138,7 @@ public class PermIconomy extends JavaPlugin {
                         page = Integer.parseInt(args[1]);}
                         catch(NumberFormatException e)
                         {
-                            sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Permissions");
+                            sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Packages");
                         }
                     }
                     List<Item> filteredItems = new ArrayList<Item>();
@@ -155,10 +155,67 @@ public class PermIconomy extends JavaPlugin {
                         for (int i = (page-1)*12; i < max; i++)
                         {
                             Item perm = filteredItems.get(i);
-                            sendMessage(player, perm.name + " " + String.valueOf(perm.price));
+                            sendMessage(player, cmdc + perm.name + " " + infoc + String.valueOf(perm.price));
                         }
                         sendMessage(player, "Page "+String.valueOf(page)+" of "+String.valueOf(maxpage));
                     }
+                }
+                else if(args[0].equalsIgnoreCase("auth"))
+                {
+                    if(checkAuth(player))
+                    {
+                        if(args.length > 1)
+                        {
+                            String str = "";
+                            for(int i = 1; i < args.length; i++)
+                                str += args[i];
+                            boolean found = false;
+                            ArrayList<Transaction> realMoneyTransactions = Transaction.realMoneyTransactions();
+                            for(int i = 0; i < realMoneyTransactions.size(); i++)
+                            {
+                                String cleanName = Item.cleanString(str);
+                                Transaction t = realMoneyTransactions.get(i);
+                                if(Item.cleanString(t.player.getName()).startsWith(cleanName))
+                                {
+                                    t.give();
+                                    Transaction.pendingTransactions.remove(player);
+                                    sendMessage(player, cmdc + "Transaction for "+t.player.getDisplayName()+" has been authorized.");
+                                    sendMessage(t.player, cmdc + "Transaction for "+t.item.name+" has been authorized.");
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if(!found)
+                            {
+                                sendMessage(player, errc + str+" was not found or does not have a pending transaction.");
+                                sendMessage(player, cmdc + "/permi authlist "+descc+"to check pending Transactions.");
+                            }
+                        }
+                        else
+                            sendMessage(player, cmdc + "/permi auth [Player Name] "+descc+"#Authorize a Transaction");
+                    }
+                    else
+                        sendMessage(player, errc + "You do not have the authorization for this.");
+                }
+                else if(args[0].equalsIgnoreCase("authlist"))
+                {
+                    if(checkAuth(player))
+                    {
+                        if(args.length == 1)
+                        {
+                            ArrayList<Transaction> realMoneyTransactions = Transaction.realMoneyTransactions();
+                            for(int i = 0; i < realMoneyTransactions.size(); i++)
+                            {
+                                Transaction t = realMoneyTransactions.get(i);
+                                sendMessage(player, (t.player.isOnline()?ChatColor.GREEN:ChatColor.RED)+
+                                        t.player.getName()+" is buying "+t.item.name+" for "+infoc+"$"+t.item.price);
+                            }
+                        }
+                        else
+                            sendMessage(player, cmdc + "/permi authlist "+descc+"#List pending Transactions");
+                    }
+                    else
+                        sendMessage(player, errc + "You do not have the authorization for this.");
                 }
                 else if(args[0].equalsIgnoreCase("reload"))
                 {
@@ -180,20 +237,28 @@ public class PermIconomy extends JavaPlugin {
         }
         return false;
     }
-    private void setupiConomy() {
+    private Plugin setupEConomy() {
         Plugin test = this.getServer().getPluginManager().getPlugin("iConomy");
-        if(iConomyA == -1)
+        if(eConomyA == -1)
         {
-            iConomyA = 0;
-            System.out.println("PermIconomy: iConomy Support Disabled");
+            eConomyA = 0;
+            System.out.println("PermIconomy: Economy Support Disabled");
+            return null;
         }
         else if(test != null) {
-            iConomyA = 1;
+            eConomyA = 1;
             System.out.println("PermIconomy: Using iConomy Plugin v" + test.getDescription().getVersion());
         } else {
-            iConomyA = 0;
-            System.out.println("PermIconomy: iConomy Support Disabled");
+            test = this.getServer().getPluginManager().getPlugin("BOSEconomy");
+            if(test != null) {
+                eConomyA = 2;
+                System.out.println("PermIconomy: Using BOSEconomy Plugin v" + test.getDescription().getVersion());
+            } else {
+                eConomyA = 0;
+                System.out.println("PermIconomy: Economy Support Disabled");
+            }
         }
+        return test;
     }
     private void setupHelp()
     {
@@ -326,25 +391,22 @@ public class PermIconomy extends JavaPlugin {
     }
     void savePref()
     {
-        if(update) {
-            ArrayList<String> data = new ArrayList<String>();
-            data.add("#Any Field Ending in 's' can have multiple values Seperated by ',' (a comma)");
-            data.add("RealMoneyAdmins=#Seperated by ',' (a comma)");
-            data.add("#You must repeat this block for each available item.");
-            data.add("Name=");
-            data.add("Price=#Put a $ sign in front to specify real money");
-            data.add("Desc=");
-            data.add("Permissions=");
-            data.add("#---OR--- Please only use a set of Permissions OR one Group");
-            data.add("#Groups=");
-            data.add("Worlds=#Use * to specify all worlds");
-            data.add("#If the item for sale is a group, any group in the RequiredGroups will be removed from the user");
-            data.add("#RequiredPackages can be another item name from this file");
-            data.add("RequiredPackages=");
-            data.add("RequiredGroups=");
-            data.add("#end");
-            saveData(data, properties);
-        }
+        ArrayList<String> data = new ArrayList<String>();
+        data.add("#Any Field Ending in 's' can have multiple values Seperated by ',' (a comma)");
+        data.add("RealMoneyAdmins=#Seperated by ',' (a comma)");
+        data.add("#You must repeat this block for each available item.");
+        data.add("Name=");
+        data.add("Price=#Put a $ sign in front to specify real money");
+        data.add("Desc=");
+        data.add("Permissions=");
+        data.add("Groups=");
+        data.add("Worlds=#Use * to specify all worlds");
+        data.add("#If the item for sale is a group, any group in the RequiredGroups will be removed from the user");
+        data.add("#RequiredPackages can be another item name from this file");
+        data.add("RequiredPackages=");
+        data.add("RequiredGroups=");
+        data.add("#end");
+        saveData(data, properties);
     }
     protected boolean checkPermissions(Player player, String node)
     {
@@ -364,10 +426,14 @@ public class PermIconomy extends JavaPlugin {
     }
     void showHelp(Player player){
         sendMessage(player, errc + "[] is required, <> is optional");
-        int i = 0;
-        if(checkPermissions(player, "PermIconomy.create")) {
-            sendMessage(player, cmdc + "/permi buy [Name] "+descc+"#Add command");
-            sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Permissions");
+        byte i = 0;
+        if(checkPermissions(player, "PermIconomy.buy")) {
+            sendMessage(player, cmdc + "/permi buy [Name] "+descc+"#Buy a Package");
+            sendMessage(player, cmdc + "/permi list [Page #] "+descc+"#List Available Packages");
+            i++;}
+        if(checkAuth(player)){
+            sendMessage(player, cmdc + "/permi auth [Player Name] "+descc+"#Authorize a Transaction");
+            sendMessage(player, cmdc + "/permi authlist "+descc+"#To check pending Transactions.");
             i++;}
         if(checkPermissions(player, "PermIconomy.admin")){
             sendMessage(player, cmdc + "/permi reload");
@@ -408,7 +474,7 @@ public class PermIconomy extends JavaPlugin {
     }
     public void addRecord(String player, String cleanName)
     {
-        List<String> get = Transaction.records.get(player);
+        ArrayList<String> get = Transaction.records.get(player);
         if(get == null)
             get = new ArrayList<String>();
         get.add(cleanName);
@@ -439,10 +505,38 @@ public class PermIconomy extends JavaPlugin {
                 {
                     String name = line.substring(0, indexOf);
                     String values = line.substring(indexOf+1);
-                    Transaction.records.put(name, Arrays.asList(values.split(",")));
+                    String[] split = values.split(",");
+                    ArrayList<String> l = new ArrayList<String>();
+                    l.addAll(Arrays.asList(values.split(",")));
+                    Transaction.records.put(name, l);
                 }
             }
         else
             saveRecords();
+    }
+    public boolean checkAuth(Player player)
+    {
+        String name = player.getName();
+        for(String s : rmadmins)
+            if(s.equalsIgnoreCase(name))
+                return true;
+        return false;
+    }
+    public int onlineAuth()
+    {
+        int i = 0;
+        for(String s : rmadmins)
+            if(this.getServer().getPlayer(s).isOnline())
+                i++;
+        return i;
+    }
+    public void sendAuthRequest(Transaction t)
+    {
+        for(String s : rmadmins)
+        {
+            sendMessage(this.getServer().getPlayer(s), (t.player.isOnline()?ChatColor.GREEN:ChatColor.RED)+
+                                        t.player.getName()+" is buying "+t.item.name+" for "+infoc+"$"+t.item.price);
+            sendMessage(this.getServer().getPlayer(s), "After you have recieved the funds. Type /permi auth "+t.player.getName());
+        }
     }
 }

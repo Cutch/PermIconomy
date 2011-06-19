@@ -32,6 +32,9 @@ public class Item {
         this.plugin = instance;
         requirements = new String[0];
         requiredGroups = new String[0];
+        groups = new String[0];
+        permissions = new String[0];
+        worlds = new String[0];
     }
     public static String cleanString(String str) {
         return str.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();

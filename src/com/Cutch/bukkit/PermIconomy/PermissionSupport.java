@@ -23,9 +23,10 @@ public class PermissionSupport {
                 Permissions p = (Permissions)test;
                 Version = p.getDescription().getVersion();
                 this.Permissions = p.getHandler();
+                System.out.println("PermIconomy: Using Permissions Plugin v" + Version);
             }
             else {
-                System.out.println("PermIconomy: Permission system not detected. Using Basic Permissions.");
+                System.out.println("PermIconomy: Permission system not detected.");
             }
         }
     }

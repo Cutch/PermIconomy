@@ -4,8 +4,8 @@ import com.nijiko.permissions.Group;
 import com.nijiko.permissions.User;
 import java.util.ArrayList;
 import java.util.Dictionary;
+import java.util.Enumeration;
 import java.util.Hashtable;
-import java.util.List;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
@@ -13,12 +13,13 @@ public class Transaction {
     PermIconomy plugin = null;
     public boolean confirm = false;
     public boolean narrow = false;
+    public boolean pendingMoney = false;
     public Item item = null;
-    List<Item> items = null;
+    ArrayList<Item> items = null;
     Player player = null;
     public static Dictionary<Player, Transaction> pendingTransactions=null;
-    public static Dictionary<String, List<String>> records=null;
-    public Transaction(PermIconomy instance, Player player, List<Item> items)
+    public static Dictionary<String, ArrayList<String>> records=null;
+    public Transaction(PermIconomy instance, Player player, ArrayList<Item> items)
     {
         this.player = player;
         this.plugin = instance;
@@ -38,7 +39,7 @@ public class Transaction {
         {
             confirm = true;
             plugin.sendMessage(player, plugin.errc+"Description: "+plugin.descc+item.description);
-            plugin.sendMessage(player, plugin.errc+"Confirm the purchase of "+item.name+" for "+plugin.infoc+item.price+" (y/n)");
+            plugin.sendMessage(player, plugin.errc+"Confirm the purchase of "+item.name+" for "+plugin.infoc+"$"+item.price+" (y/n)" + (item.realMoney?"(Real Money)":""));
             narrow = false;
         }
     }
@@ -53,7 +54,7 @@ public class Transaction {
     public boolean select(String str)
     {
         String cleanStr = Item.cleanString(str);
-        List<Item> possibleItems = new ArrayList<Item>();
+        ArrayList<Item> possibleItems = new ArrayList<Item>();
         for(int i = 0; i < items.size(); i++)
         {
             Item item = items.get(i);
@@ -94,11 +95,17 @@ public class Transaction {
                 plugin.sendMessage(player, plugin.cmdc+"Transaction Cannot be Completed. Not enough money.");
                 return false;
             }
+            give();
         }
         else
         {
-            //Send Message To Admins
+            this.pendingMoney = true;
         }
+        return true;
+    }
+    public void give()
+    {
+        String name = player.getName();
         for(String w : item.worlds)
         {
             User user = plugin.pms.Permissions.getUserObject(w, name);
@@ -115,48 +122,26 @@ public class Transaction {
                     if(!user.hasPermission(s))
                         user.addPermission(s);
                 }
-                for(String s : this.item.requiredGroups)
-                {
-                    Group g = plugin.pms.Permissions.getGroupObject(w, s);
-                    if(g != null)
-                        user.removeParent(g);
-                }
+                if(this.item.groups.length > 0)
+                    for(String s : this.item.requiredGroups)
+                    {
+                        Group g = plugin.pms.Permissions.getGroupObject(w, s);
+                        if(g != null)
+                            user.removeParent(g);
+                    }
             }
         }
-        return true;
     }
-//    List<Group> removeGroups = null;
-//    public boolean checkRequirements()
-//    {
-//        removeGroups = new ArrayList<Group>();
-//        boolean has = true;
-//        for(String w : item.worlds)
-//        {
-//            for(String r : item.requirements)
-//            {
-//                if(item.isGroup)
-//                {
-//                    Group g = plugin.pms.Permissions.getGroupObject(w, r);
-//                    if(g != null)
-//                    {
-//                        if(plugin.pms.Permissions.inGroup(w, player.getName(), r))
-//                            removeGroups.add(g);
-//                        else
-//                            has = false;
-//                    }
-//                    else
-//                    {
-//                        if(!records.get(player).contains(Item.cleanString(r)))
-//                            has = false;
-//                    }
-//                }
-//                else
-//                {
-//                    if(!records.get(player).contains(Item.cleanString(r)))
-//                        has = false;
-//                }
-//            }
-//        }
-//        return has;
-//    }
+    public static ArrayList<Transaction> realMoneyTransactions()
+    {
+        ArrayList<Transaction> realMoneyPending = new ArrayList<Transaction>();
+        Enumeration<Transaction> elements = Transaction.pendingTransactions.elements();
+        for(Transaction t = null; elements.hasMoreElements();)
+        {
+             t = elements.nextElement();
+             if(t.pendingMoney)
+                 realMoneyPending.add(t);
+        }
+        return realMoneyPending;
+    }
 }

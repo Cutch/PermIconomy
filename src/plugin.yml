@@ -4,5 +4,5 @@ version: 1.0
 author: Cutch
 commands:
   permi:
-    description: Add Hotkey like functionality
-    usage: /permi [buy|list|reload]
+    description: The Bridge between Permissions and IConomy
+    usage: /permi [buy|list|auth|authlist|reload]
