@@ -3,28 +3,71 @@ package com.Cutch.bukkit.PermIconomy;
 import com.nijiko.permissions.Group;
 import com.nijiko.permissions.User;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Dictionary;
 import java.util.Enumeration;
-import java.util.Hashtable;
-import org.bukkit.ChatColor;
+import java.util.GregorianCalendar;
+import java.util.Timer;
+import java.util.TimerTask;
 import org.bukkit.entity.Player;
 
-public class Transaction {
+public class Transaction extends TimerTask implements java.io.Serializable {
     PermIconomy plugin = null;
     public boolean confirm = false;
     public boolean narrow = false;
     public boolean pendingMoney = false;
+    public boolean renew = false;
     public Item item = null;
     ArrayList<Item> items = null;
     Player player = null;
     public static Dictionary<Player, Transaction> pendingTransactions=null;
+    public static ArrayList<Transaction> rentalTransactions=null;
     public static Dictionary<String, ArrayList<String>> records=null;
+    ArrayList<Group> oldGroups = null;
+    public Calendar expiry = null;
     public Transaction(PermIconomy instance, Player player, ArrayList<Item> items)
     {
         this.player = player;
         this.plugin = instance;
         this.items = items;
+        oldGroups = new ArrayList<Group>();
         setMode();
+    }
+    public Transaction(PermIconomy instance, String str)
+    {
+        this.plugin = instance;
+        String[] split = str.split(",");
+        confirm = Boolean.parseBoolean(split[0]);
+        narrow = Boolean.parseBoolean(split[1]);
+        pendingMoney = Boolean.parseBoolean(split[2]);
+        renew = Boolean.parseBoolean(split[3]);
+        items = new ArrayList<Item>();
+        for(Item i : plugin.items)
+            if(i.cleanName.equals(split[4]))
+            {
+                item = i;
+                items.add(i);
+            }
+        player = plugin.getServer().getPlayer(split[5]);
+        expiry = new GregorianCalendar();
+        expiry.setTimeInMillis(Long.parseLong(split[6]));
+        oldGroups = new ArrayList<Group>();
+        for(int i = 7; i < split.length; i++)
+        {
+            String[] split1 = split[i].split("|");
+            Group groupObject = plugin.pms.Permissions.getGroupObject(split1[1], split1[0]);
+            if(groupObject != null)
+                oldGroups.add(groupObject);
+        }
+        setMode();
+    }
+    @Override
+    public String toString()
+    {
+        String str=confirm+","+narrow+","+pendingMoney+","+renew+","+item.cleanName+","+player.getName()+","+expiry.getTimeInMillis();
+        for(Group g : oldGroups)
+            str+=","+g.getName()+"|"+g.getWorld();
+        return str;
     }
     public void setMode()
     {
@@ -37,10 +80,24 @@ public class Transaction {
         }
         if(item != null)
         {
-            confirm = true;
-            plugin.sendMessage(player, plugin.errc+"Description: "+plugin.descc+item.description);
-            plugin.sendMessage(player, plugin.errc+"Confirm the purchase of "+item.name+" for "+plugin.infoc+"$"+item.price+" (y/n)" + (item.realMoney?"(Real Money)":""));
-            narrow = false;
+            ArrayList<String> record = Transaction.records.get(player);
+            if(record != null && record.contains(item.cleanName))
+            {
+                plugin.sendMessage(player, plugin.errc+"You have already purchased this package.");
+                Transaction.pendingTransactions.remove(player);
+            }
+            else
+            {
+                confirm = true;
+                plugin.sendMessage(player, plugin.errc+"Description: "+plugin.descc+item.description);
+                if(item.rental)
+                {
+                    plugin.sendMessage(player, plugin.errc+"This purchase will expire in: "+plugin.infoc+item.rentalPeriod.toString());
+                    plugin.sendMessage(player, plugin.errc+"Type \"a\" to auto-renew this subscription");
+                }
+                plugin.sendMessage(player, plugin.errc+"Confirm the purchase of "+item.name+" for "+plugin.infoc+"$"+item.price+" (y/n"+(item.rental?"/a":"")+")" + (item.realMoney?"(Real Money)":""));
+                narrow = false;
+            }
         }
     }
     public boolean select(int index)
@@ -105,6 +162,20 @@ public class Transaction {
     }
     public void give()
     {
+        if(item.rental)
+        {
+            expiry = new GregorianCalendar();
+            expiry.add(Calendar.YEAR, item.rentalPeriod.year);
+            expiry.add(Calendar.MONTH, item.rentalPeriod.month);
+            expiry.add(Calendar.DAY_OF_YEAR, item.rentalPeriod.day);
+            expiry.add(Calendar.HOUR, item.rentalPeriod.hour);
+            expiry.add(Calendar.MINUTE, item.rentalPeriod.minute);
+            expiry.add(Calendar.SECOND, item.rentalPeriod.second);
+            Timer t = new Timer();
+            t.schedule(this, expiry.getTime());
+            Transaction.rentalTransactions.add(this);
+            plugin.saveRentals();
+        }
         String name = player.getName();
         for(String w : item.worlds)
         {
@@ -127,10 +198,42 @@ public class Transaction {
                     {
                         Group g = plugin.pms.Permissions.getGroupObject(w, s);
                         if(g != null)
+                        {
                             user.removeParent(g);
+                            if(user.inGroup(w, s))
+                                oldGroups.add(g);
+                        }
                     }
             }
         }
+    }
+    public void remove()
+    {
+        String name = player.getName();
+        for(String w : item.worlds)
+        {
+            User user = plugin.pms.Permissions.getUserObject(w, name);
+            if(user != null)
+            {
+                for(String s : this.item.groups)
+                {
+                    Group g = plugin.pms.Permissions.getGroupObject(w, s);
+                    if(g != null)
+                        user.removeParent(g);
+                }
+                for(String s : this.item.permissions)
+                {
+                    if(user.hasPermission(s))
+                        user.removePermission(s);
+                }
+                for(Group g : oldGroups)
+                {
+                    if(g != null)
+                        user.addParent(g);
+                }
+            }
+        }
+        plugin.removeRecord(name, item.cleanName);
     }
     public static ArrayList<Transaction> realMoneyTransactions()
     {
@@ -143,5 +246,38 @@ public class Transaction {
                  realMoneyPending.add(t);
         }
         return realMoneyPending;
+    }
+    public void run() {
+        if(this.renew)
+        {
+            plugin.sendMessage(player, plugin.cmdc+"Auto-Renewing Transaction "+plugin.infoc+item.name+plugin.cmdc+" charging "+plugin.infoc+item.price + (item.realMoney?"(Real Money)":"") +plugin.cmdc+" to your account.");
+            if(item.realMoney)
+            {
+                int onlineAuth = plugin.onlineAuth();
+                plugin.sendMessage(player, plugin.cmdc+"Transaction Pending. Waiting for authorization from an admin.");
+                plugin.sendMessage(player, plugin.cmdc+""+onlineAuth+" Admin"+(onlineAuth!=1?"s":"")+" Online");
+                plugin.sendAuthRequest(this);
+            }
+            else
+            {
+                String name = player.getName();
+                if(plugin.ics.hasEnough(name, item.price))
+                {
+                    plugin.ics.subtract(name, item.price);
+                    double balance = plugin.ics.balance(name);
+                    plugin.sendMessage(player, plugin.cmdc+"Transaction Complete. Current Balance $"+balance);
+                    plugin.addRecord(name, item.cleanName);
+                }
+                else
+                {
+                    plugin.sendMessage(player, plugin.cmdc+"Transaction Cannot be Completed. Not enough money.");
+                }
+            }
+        }
+        else
+        {
+            plugin.sendMessage(player, plugin.cmdc+"Transaction "+item.name+" has expired.");
+            this.remove();
+        }
     }
 }

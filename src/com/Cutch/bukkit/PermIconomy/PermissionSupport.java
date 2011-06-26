@@ -1,10 +1,7 @@
 package com.Cutch.bukkit.PermIconomy;
 
-import com.nijiko.permissions.Group;
 import com.nijiko.permissions.PermissionHandler;
 import com.nijikokun.bukkit.Permissions.Permissions;
-import java.util.Collection;
-import java.util.Set;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 

@@ -1,7 +1,6 @@
 package com.Cutch.bukkit.PermIconomy;
 
 import java.util.ArrayList;
-import java.util.Enumeration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -58,6 +57,17 @@ public class PlayerEvents extends PlayerListener {
                 } else if(message.equalsIgnoreCase("n") || message.equalsIgnoreCase("c")) {
                     Transaction.pendingTransactions.remove(player);
                     plugin.sendMessage(player, plugin.cmdc+"Transaction Cancelled.");
+                } else if(message.equalsIgnoreCase("a")) {
+                    Transaction item = Transaction.pendingTransactions.get(player);
+                    if(item.item.rental)
+                    {
+                        item.renew = !item.renew;
+                        if(item.renew)
+                            plugin.sendMessage(player, plugin.cmdc+"Transaction Will automatically be renewed. Type \"a\" to disable this.");
+                        else
+                            plugin.sendMessage(player, plugin.cmdc+"Transaction Will Not be renewed. Type \"a\" to enable this.");
+                        plugin.sendMessage(player, plugin.errc+"Confirm the purchase of "+item.item.name+" for "+plugin.infoc+"$"+item.item.price+" (y/n/a)" + (item.item.realMoney?"(Real Money)":""));
+                    }
                 }
             }
             else if(transaction.narrow)

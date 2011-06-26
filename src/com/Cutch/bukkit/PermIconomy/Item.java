@@ -1,7 +1,6 @@
 package com.Cutch.bukkit.PermIconomy;
 
 import com.nijiko.permissions.Group;
-import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.World;
 
@@ -10,7 +9,6 @@ public class Item {
     public double price = 0;
     public boolean realMoney = false;
     public String[] permissions = null;
-//    public boolean isGroup = false;
     public String name = "";
     public String description = "";
     public String cleanName = "";
@@ -18,16 +16,8 @@ public class Item {
     public String[] requiredGroups = null;
     public String[] worlds = null;
     public String[] groups = null;
-//    public Item(PermIconomy instance, String permissions, boolean isGroup, String name, String desc, double price)
-//    {
-//        this.plugin = instance;
-//        this.isGroup = isGroup;
-//        this.permissions = permissions.split(",");
-//        this.name = name;
-//        this.description = desc;
-//        this.price = price;
-//        this.cleanName = cleanString(name);
-//    }
+    public boolean rental = false;
+    public Period rentalPeriod = null;
     public Item(PermIconomy instance) {
         this.plugin = instance;
         requirements = new String[0];
