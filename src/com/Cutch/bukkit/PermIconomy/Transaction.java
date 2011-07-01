@@ -1,7 +1,5 @@
 package com.Cutch.bukkit.PermIconomy;
 
-import com.nijiko.permissions.Group;
-import com.nijiko.permissions.User;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Dictionary;
@@ -19,18 +17,18 @@ public class Transaction extends TimerTask implements java.io.Serializable {
     public boolean renew = false;
     public Item item = null;
     ArrayList<Item> items = null;
-    Player player = null;
+    public Player player = null;
     public static Dictionary<Player, Transaction> pendingTransactions=null;
     public static ArrayList<Transaction> rentalTransactions=null;
     public static Dictionary<String, ArrayList<String>> records=null;
-    ArrayList<Group> oldGroups = null;
+    ArrayList<GroupSupport> oldGroups = null;
     public Calendar expiry = null;
     public Transaction(PermIconomy instance, Player player, ArrayList<Item> items)
     {
         this.player = player;
         this.plugin = instance;
         this.items = items;
-        oldGroups = new ArrayList<Group>();
+        oldGroups = new ArrayList<GroupSupport>();
         setMode();
     }
     public Transaction(PermIconomy instance, String str)
@@ -51,21 +49,22 @@ public class Transaction extends TimerTask implements java.io.Serializable {
         player = plugin.getServer().getPlayer(split[5]);
         expiry = new GregorianCalendar();
         expiry.setTimeInMillis(Long.parseLong(split[6]));
-        oldGroups = new ArrayList<Group>();
+        Timer t = new Timer();
+        t.schedule(this, expiry.getTime());
+        oldGroups = new ArrayList<GroupSupport>();
         for(int i = 7; i < split.length; i++)
         {
             String[] split1 = split[i].split("|");
-            Group groupObject = plugin.pms.Permissions.getGroupObject(split1[1], split1[0]);
+            GroupSupport groupObject = new GroupSupport(plugin, split1[0], split1[1]);
             if(groupObject != null)
                 oldGroups.add(groupObject);
         }
-        setMode();
     }
     @Override
     public String toString()
     {
         String str=confirm+","+narrow+","+pendingMoney+","+renew+","+item.cleanName+","+player.getName()+","+expiry.getTimeInMillis();
-        for(Group g : oldGroups)
+        for(GroupSupport g : oldGroups)
             str+=","+g.getName()+"|"+g.getWorld();
         return str;
     }
@@ -179,29 +178,33 @@ public class Transaction extends TimerTask implements java.io.Serializable {
         String name = player.getName();
         for(String w : item.worlds)
         {
-            User user = plugin.pms.Permissions.getUserObject(w, name);
-            if(user != null)
+            plugin.us.getUser(w, name);
+//            User user = plugin.pms.Permissions.getUserObject(w, name);
+            if(plugin.us.notNULL())
             {
                 for(String s : this.item.groups)
                 {
-                    Group g = plugin.pms.Permissions.getGroupObject(w, s);
-                    if(g != null)
-                        user.addParent(g);
+                    plugin.gs.getGroup(s, w);
+//                    Group g = plugin.pms.Permissions.getGroupObject(w, s);
+                    if(plugin.gs.notNULL())
+                        plugin.us.addGroup(plugin.gs);
+//                        user.addParent(g);
                 }
                 for(String s : this.item.permissions)
                 {
-                    if(!user.hasPermission(s))
-                        user.addPermission(s);
+                    if(!plugin.us.hasPermissions(w, s))
+                        plugin.us.addPermissions(w, s);
+//                        user.addPermission(s);
                 }
                 if(this.item.groups.length > 0)
                     for(String s : this.item.requiredGroups)
                     {
-                        Group g = plugin.pms.Permissions.getGroupObject(w, s);
-                        if(g != null)
+                        GroupSupport gs = new GroupSupport(plugin, s, w);
+                        if(plugin.gs.notNULL())
                         {
-                            user.removeParent(g);
-                            if(user.inGroup(w, s))
-                                oldGroups.add(g);
+                            if(plugin.us.inGroup(gs))
+                                oldGroups.add(gs);
+                            plugin.us.removeGroup(plugin.gs);
                         }
                     }
             }
@@ -212,24 +215,25 @@ public class Transaction extends TimerTask implements java.io.Serializable {
         String name = player.getName();
         for(String w : item.worlds)
         {
-            User user = plugin.pms.Permissions.getUserObject(w, name);
-            if(user != null)
+            plugin.us.getUser(w, name);
+//            User user = plugin.pms.Permissions.getUserObject(w, name);
+            if(plugin.us.notNULL())
             {
                 for(String s : this.item.groups)
                 {
-                    Group g = plugin.pms.Permissions.getGroupObject(w, s);
-                    if(g != null)
-                        user.removeParent(g);
+                    plugin.gs.getGroup(s, w);
+                    if(plugin.gs.notNULL())
+                        plugin.us.removeGroup(plugin.gs);
                 }
                 for(String s : this.item.permissions)
                 {
-                    if(user.hasPermission(s))
-                        user.removePermission(s);
+                    if(!plugin.us.hasPermissions(w, s))
+                        plugin.us.removePermissions(w, s);
                 }
-                for(Group g : oldGroups)
+                for(GroupSupport g : oldGroups)
                 {
-                    if(g != null)
-                        user.addParent(g);
+                    if(plugin.gs.notNULL())
+                        plugin.us.addGroup(plugin.gs);
                 }
             }
         }

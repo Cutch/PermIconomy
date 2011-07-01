@@ -1,6 +1,5 @@
 package com.Cutch.bukkit.PermIconomy;
 
-import com.nijiko.permissions.Group;
 import java.util.List;
 import org.bukkit.World;
 
@@ -84,8 +83,9 @@ public class Item {
             if(has)
             for(String r : this.requiredGroups)
             {
-                Group g = plugin.pms.Permissions.getGroupObject(w, r);
-                if(g != null)
+                plugin.gs.getGroup(w, r);
+//                Group g = plugin.pms.Permissions.getGroupObject(w, r);
+                if(plugin.gs.notNULL())
                 {
                     if(!plugin.pms.Permissions.inGroup(w, player, r))
                         has = false;

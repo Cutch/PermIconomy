@@ -3,14 +3,10 @@ package com.Cutch.bukkit.PermIconomy;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.text.SimpleDateFormat;
 
 import me.taylorkelly.help.Help;
@@ -39,6 +35,8 @@ public class PermIconomy extends JavaPlugin {
     String properties = "PermIconomy.properties";
     String recordFile = "Records.db";
     String rentalFile = "Rentals.db";
+    public GroupSupport gs = null;
+    public UserSupport us = null;
     public iConomySupport ics = null;
     PermissionSupport pms = null;
     public int eConomyA = 0;
@@ -68,6 +66,8 @@ public class PermIconomy extends JavaPlugin {
         }catch(NoClassDefFoundError e){
             System.out.println("PermIconomy: Permission system not detected.");
         }
+        gs = new GroupSupport(this);
+        us = new UserSupport(this);
         Plugin econ = setupEConomy();
         setupHelp();
         PluginManager plmgr = getServer().getPluginManager();
@@ -640,8 +640,11 @@ public class PermIconomy extends JavaPlugin {
     {
         int i = 0;
         for(String s : rmadmins)
-            if(this.getServer().getPlayer(s).isOnline())
+        {
+            Player player = this.getServer().getPlayer(s);
+            if(player != null && player.isOnline())
                 i++;
+        }
         return i;
     }
     public void sendAuthRequest(Transaction t)
@@ -649,6 +652,8 @@ public class PermIconomy extends JavaPlugin {
         for(String s : rmadmins)
         {
             Player player = this.getServer().getPlayer(s);
+            if(player == null)
+                continue;
             if(!selfAuth && t.player.equals(player))
                 continue;
             sendMessage(player, (t.player.isOnline()?ChatColor.GREEN:ChatColor.RED)+
@@ -667,8 +672,9 @@ public class PermIconomy extends JavaPlugin {
     {
         Transaction.rentalTransactions = new ArrayList<Transaction>();
         ArrayList<String> data = readData(rentalFile, true);
-        for(String t : data)
-            Transaction.rentalTransactions.add(new Transaction(this, t));
+        if(data != null)
+            for(String t : data)
+                Transaction.rentalTransactions.add(new Transaction(this, t));
     }
 //    public void saveRentals()
 //    {
